@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: traffic-billing
+  namespace: kube-system
+  labels:
+    app: traffic-billing
+spec:
+  selector:
+    matchLabels:
+      name: traffic-billing
+  template:
+    metadata:
+      labels:
+        name: traffic-billing
+    spec:
+      containers:
+      - name: traffic-billing
+        image:  withlinnn/traffic-billing:0.01 
+        resources:
+          limits:
+            memory: 200Mi
+          requests:
+            cpu: 100m
+            memory: 200Mi
+        securityContext:
+          privileged: true
+      terminationGracePeriodSeconds: 30
+      serviceAccount: traffic-billing
+      hostNetwork: true

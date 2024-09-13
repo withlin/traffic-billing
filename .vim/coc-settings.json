@@ -1,0 +1,3 @@
+{
+  "rust-analyzer.linkedProjects": ["Cargo.toml", "traffic-billing-ebpf/Cargo.toml"]
+}
