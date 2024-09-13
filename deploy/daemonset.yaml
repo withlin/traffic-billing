@@ -25,6 +25,6 @@ spec:
             memory: 200Mi
         securityContext:
           privileged: true
-      terminationGracePeriodSeconds: 30
+      terminationGracePeriodSeconds: 3rm 0
       serviceAccount: traffic-billing
       hostNetwork: true

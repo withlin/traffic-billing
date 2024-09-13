@@ -32,8 +32,8 @@ cargo xtask run
 ```
 sudo apt-get update
 sudo apt install build-essential
- cargo install bpf-linker
- apt install llvm
+cargo install bpf-linker
+apt install llvm
 cargo xtask build-ebpf
 cargo xtask run
 ```

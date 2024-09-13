@@ -114,6 +114,8 @@ unsafe fn is_container_process() -> Result<bool, c_long> {
     Ok(bpf_probe_read(&(*pidns).level)? > 0)
 }
 
+// struct sock with udp_sendmsg may not miss ip addresses on listening socket.
+// Addresses are retrieved from struct flowi4 with ip_make_skb.
 #[kprobe(name = "ip_send_skb")]
 pub fn ip_send_skb(ctx: ProbeContext) -> u32 {
     match unsafe { try_ip_send_skb(&ctx) } {
@@ -166,18 +168,7 @@ pub fn tcp_sendmsg(ctx: ProbeContext) -> u32 {
     }
 }
 
-#[kprobe(name = "tcp_recvmsg")]
-pub fn tcp_recvmsg(ctx: ProbeContext) -> u32 {
-    match unsafe { try_tcp_recvmsg(&ctx) } {
-        Ok(ret) => ret,
-        Err(ret) => {
-            if ret != 0 {
-                warn!(&ctx, "tcp_recvmsg failed in kernel: {}", ret);
-            }
-            ret as u32
-        }
-    }
-}
+
 
 unsafe fn log_packet(
     ctx: &ProbeContext,
@@ -235,38 +226,8 @@ unsafe fn try_tcp_sendmsg(ctx: &ProbeContext) -> Result<u32, c_long> {
     Ok(0)
 }
 
-unsafe fn try_tcp_recvmsg(ctx: &ProbeContext) -> Result<u32, c_long> {
-    if !is_container_process()? {
-        return Ok(0);
-    }
 
-    let pid = bpf_get_current_pid_tgid() as u32;
-    let sk = &*bpf_probe_read(&ctx.arg::<*const sock>(0).ok_or(1)?)?;
 
-    let saddr = u32::from_be(bpf_probe_read(
-        &sk.__sk_common
-            .__bindgen_anon_1
-            .__bindgen_anon_1
-            .skc_rcv_saddr,
-    )?);
-    let daddr = u32::from_be(bpf_probe_read(
-        &sk.__sk_common.__bindgen_anon_1.__bindgen_anon_1.skc_daddr,
-    )?);
-    let len = ntohs(ctx.arg(2).ok_or(1u32)?);
-
-    let family = EthProtocol::from_family(bpf_probe_read(&sk.__sk_common.skc_family)?);
-    if family.is_other() || family.is_ipv6() {
-        return Ok(0);
-    }
-
-    let saddr_lookup = Key::new(32, u32::from(saddr).to_be());
-    if CIDRS.get(&saddr_lookup).is_some() {
-        return Ok(0);
-    }
-
-    log_packet(ctx, saddr, daddr, pid, Direction::Inbound, len as u32)?;
-    Ok(0)
-}
 
 unsafe fn try_tcp_cleanup_rbuf(ctx: &ProbeContext) -> Result<u32, c_long> {
     if !is_container_process()? {
