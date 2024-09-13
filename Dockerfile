@@ -14,7 +14,9 @@ WORKDIR /usr/src/build/
 
 ADD .. ./
 
-RUN cargo xtask build --release
+RUN cargo xtask build-ebpf --release
+
+RUN cargo build --release
 
 # Final image stage
 FROM debian:buster-slim
