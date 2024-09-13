@@ -13,6 +13,7 @@ use std::sync::Arc;
 pub struct PodInfo {
     pub pod_name: String,
     pub namespace: String,
+    pub cluster_name: String,
 }
 
 // This struct represents the minimal information we need from a Pod
@@ -33,17 +34,21 @@ impl MinimalPod {
     }
 }
 
-async fn handle_pod_event(pod_map: &DashMap<String, PodInfo>, event: Event<MinimalPod>) {
+async fn handle_pod_event(
+    pod_map: &DashMap<String, PodInfo>,
+    event: Event<MinimalPod>,
+    cluster_name: String,
+) {
     match event {
         Event::Applied(pod) => {
-            if let (Some(pod_ip), Some(pod_name), Some(namespace)) =
-                (pod.ip, pod.name, pod.namespace)
+            if let (Some(pod_ip), Some(pod_name), Some(namespace)) = (pod.ip, pod.name, pod.namespace)
             {
                 pod_map.insert(
                     pod_ip.clone(),
                     PodInfo {
                         pod_name: pod_name.clone(),
                         namespace: namespace.clone(),
+                        cluster_name: cluster_name.clone(),
                     },
                 );
                 info!("Pod added: {} in namespace {}", pod_name, namespace);
@@ -63,9 +68,14 @@ async fn handle_pod_event(pod_map: &DashMap<String, PodInfo>, event: Event<Minim
     }
 }
 
-pub async fn watch_pods(client: Client, pod_map: Arc<DashMap<String, PodInfo>>) {
+pub async fn watch_pods(
+    client: Client,
+    pod_map: Arc<DashMap<String, PodInfo>>,
+    cluster_name: String,
+    node_ip: String,
+) {
     let api = Api::<Pod>::all(client);
-    let lp = ListParams::default();
+    let lp = ListParams::default().fields(&format!("status.hostIP={}", node_ip));
 
     info!("Starting to watch pods");
 
@@ -79,7 +89,7 @@ pub async fn watch_pods(client: Client, pod_map: Arc<DashMap<String, PodInfo>>) 
                     Event::Restarted(pods.into_iter().map(MinimalPod::from_pod).collect())
                 }
             };
-            handle_pod_event(&pod_map, minimal_event).await;
+            handle_pod_event(&pod_map, minimal_event, cluster_name.clone()).await;
             Ok(())
         })
         .await

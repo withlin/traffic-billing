@@ -51,6 +51,7 @@ lazy_static! {
             "command",
             "pod_name",
             "namespace"
+            "cluster_name"
         ]
     )
     .unwrap();
@@ -63,6 +64,9 @@ struct Opt {
     
     #[clap(long, use_value_delimiter = true, value_delimiter = ',')]
     cidrs: Vec<String>,
+
+    #[clap(long)]
+    cluster_name: String,
 }
 
 async fn metrics(req: Request<Body>) -> Result<Response<Body>, Infallible> {
@@ -99,10 +103,20 @@ async fn main() -> Result<(), anyhow::Error> {
         ColorChoice::Auto,
     )?;
 
+    let node_ip = env::var("NODE_IP").map_err(|e| {
+        error!("NODE_IP environment variable not set");
+        e
+    })?;
+
+    if node_ip.is_empty() {
+        error!("NODE_IP environment variable is empty");
+        return Err(anyhow::anyhow!("NODE_IP environment variable is empty"));
+    }
+
     let pod_map = Arc::new(DashMap::new());
 
     let client = Client::try_default().await?;
-    task::spawn(pod_watcher::watch_pods(client, Arc::clone(&pod_map)));
+    task::spawn(pod_watcher::watch_pods(client, Arc::clone(&pod_map),node_ip));
 
     let addr: SocketAddr = format!("0.0.0.0:{}", opt.port).parse()?;
     let make_svc = make_service_fn(|_conn| async { Ok::<_, Infallible>(service_fn(metrics)) });

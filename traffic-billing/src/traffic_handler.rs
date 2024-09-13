@@ -34,9 +34,9 @@ pub fn handle_traffic_event(data: &PacketLog, pod_map: &Arc<DashMap<String, PodI
     };
 
     let pod_info = pod_map.get(&pod_addr.to_string());
-    let (pod_name, pod_namespace) = pod_info
-        .map(|p| (p.pod_name.clone(), p.namespace.clone()))
-        .unwrap_or_else(|| (String::new(), String::new()));
+    let (pod_name, pod_namespace, cluster_name) = pod_info
+        .map(|p| (p.pod_name.clone(), p.namespace.clone(), p.cluster_name.clone()))
+        .unwrap_or_else(|| (String::new(), String::new(), String::new()));
 
     let command = String::from_utf8_lossy(&data.command);
 
@@ -54,6 +54,7 @@ pub fn handle_traffic_event(data: &PacketLog, pod_map: &Arc<DashMap<String, PodI
             &command,
             &pod_name,
             &pod_namespace,
+            &cluster_name,
         ])
         .inc_by(data.len as f64);
 }
