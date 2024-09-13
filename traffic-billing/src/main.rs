@@ -9,16 +9,12 @@ use aya_log::BpfLogger;
 use bytes::BytesMut;
 use clap::Parser;
 use dashmap::DashMap;
-use futures::TryStreamExt;
 use hyper::{
     header::CONTENT_TYPE,
     service::{make_service_fn, service_fn},
     Body, Method, Request, Response, Server, StatusCode,
 };
-use k8s_openapi::api::core::v1::Pod;
 use kube::{
-    api::{Api, ListParams},
-    runtime::watcher::{watcher, Event},
     Client,
 };
 use lazy_static::lazy_static;
@@ -26,6 +22,7 @@ use log::{error, info};
 use prometheus::{register_counter_vec, CounterVec, Encoder, TextEncoder};
 use simplelog::{ColorChoice, ConfigBuilder, LevelFilter, TermLogger, TerminalMode};
 use std::{
+    env, 
     convert::{Infallible, TryInto},
     net::{Ipv4Addr, SocketAddr},
     sync::Arc,
@@ -50,7 +47,7 @@ lazy_static! {
             "pid",
             "command",
             "pod_name",
-            "namespace"
+            "namespace",
             "cluster_name"
         ]
     )
@@ -116,7 +113,11 @@ async fn main() -> Result<(), anyhow::Error> {
     let pod_map = Arc::new(DashMap::new());
 
     let client = Client::try_default().await?;
-    task::spawn(pod_watcher::watch_pods(client, Arc::clone(&pod_map),node_ip));
+    task::spawn(pod_watcher::watch_pods(
+        client, 
+        Arc::clone(&pod_map),
+        opt.cluster_name.clone(),
+        node_ip));
 
     let addr: SocketAddr = format!("0.0.0.0:{}", opt.port).parse()?;
     let make_svc = make_service_fn(|_conn| async { Ok::<_, Infallible>(service_fn(metrics)) });
@@ -128,7 +129,7 @@ async fn main() -> Result<(), anyhow::Error> {
     attach_kprobes(&mut bpf)?;
     setup_lpm_trie(&mut bpf, &opt.cidrs)?;
 
-    let perf_array = setup_perf_array(&mut bpf, pod_map)?;
+    let _perf_array = setup_perf_array(&mut bpf, pod_map)?;
 
     info!("Server is starting on {}", addr);
     let server_task = task::spawn(async move {
@@ -177,7 +178,7 @@ fn attach_kprobes(bpf: &mut Bpf) -> Result<(), anyhow::Error> {
 }
 
 fn setup_lpm_trie(bpf: &mut Bpf, cidrs: &[String]) -> Result<(), anyhow::Error> {
-    let mut trie = LpmTrie::try_from(bpf.map_mut("LANCIDRS")?)?;
+    let  trie = LpmTrie::try_from(bpf.map_mut("LANCIDRS")?)?;
 
     for (i, cidr) in cidrs.iter().enumerate() {
         let (ip, prefix_len) = parse_cidr(cidr)?;
