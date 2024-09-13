@@ -1,11 +1,11 @@
-use aya_gen::generate::InputFile;
+use aya_tool::generate::InputFile;
 use std::process::Command;
 use std::{fs::File, io::Write, path::PathBuf};
 
 pub fn generate() -> Result<(), anyhow::Error> {
     let dir = PathBuf::from("traffic-billing-ebpf/src");
     let names = vec!["task_struct", "ipv6hdr", "sk_buff", "udphdr", "tcp_hdr"];
-    let bindings = aya_gen::generate(
+    let bindings = aya_tool::generate(
         InputFile::Btf(PathBuf::from("/sys/kernel/btf/vmlinux")),
         &names,
         &[],

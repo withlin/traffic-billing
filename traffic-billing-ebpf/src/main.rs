@@ -25,7 +25,7 @@ use traffic_billing_common::PacketLog;
 use vmlinux::{iphdr, sk_buff, sock, task_struct, udphdr};
 
 #[map(name = "LANCIDRS")]
-static mut LANLANCIDRS: LpmTrie<u32, u32> = LpmTrie::<u32, u32>::with_max_entries(1024, 1);
+static mut LANCIDRS: LpmTrie<u32, u32> = LpmTrie::<u32, u32>::with_max_entries(1024, 1);
 
 #[map(name = "EVENTS")]
 static mut EVENTS: PerfEventArray<PacketLog> =
