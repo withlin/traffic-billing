@@ -24,8 +24,8 @@ mod vmlinux;
 use traffic_billing_common::PacketLog;
 use vmlinux::{iphdr, sk_buff, sock, task_struct, udphdr};
 
-#[map(name = "CIDRS")]
-static mut CIDRS: LpmTrie<u32, u32> = LpmTrie::<u32, u32>::with_max_entries(1024, 1);
+#[map(name = "LANCIDRS")]
+static mut LANLANCIDRS: LpmTrie<u32, u32> = LpmTrie::<u32, u32>::with_max_entries(1024, 1);
 
 #[map(name = "EVENTS")]
 static mut EVENTS: PerfEventArray<PacketLog> =
@@ -218,7 +218,7 @@ unsafe fn try_tcp_sendmsg(ctx: &ProbeContext) -> Result<u32, c_long> {
     }
 
     let daddr_lookup = Key::new(32, u32::from(daddr).to_be());
-    if CIDRS.get(&daddr_lookup).is_some() {
+    if LANCIDRS.get(&daddr_lookup).is_some() {
         return Ok(0);
     }
 
@@ -254,7 +254,7 @@ unsafe fn try_tcp_cleanup_rbuf(ctx: &ProbeContext) -> Result<u32, c_long> {
     }
 
     let daddr_lookup = Key::new(32, u32::from(daddr).to_be());
-    if CIDRS.get(&daddr_lookup).is_some() {
+    if LANCIDRS.get(&daddr_lookup).is_some() {
         return Ok(0);
     }
 
@@ -288,7 +288,7 @@ unsafe fn try_ip_send_skb(ctx: &ProbeContext) -> Result<u32, c_long> {
 
     let len = ntohs(bpf_probe_read(&trans_hdr.len)?);
     let daddr_lookup = Key::new(32, u32::from(ip_hdr_new.daddr as u32).to_be());
-    if CIDRS.get(&daddr_lookup).is_some() {
+    if LANCIDRS.get(&daddr_lookup).is_some() {
         return Ok(0);
     }
 
@@ -323,7 +323,7 @@ unsafe fn try_skb_consume_udp(ctx: &ProbeContext) -> Result<u32, c_long> {
     }
 
     let saddr_lookup = Key::new(32, u32::from(daddr).to_be());
-    if CIDRS.get(&saddr_lookup).is_some() {
+    if LANCIDRS.get(&saddr_lookup).is_some() {
         return Ok(0);
     }
 

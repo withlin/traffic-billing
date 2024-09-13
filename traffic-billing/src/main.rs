@@ -33,11 +33,9 @@ use std::{
 use tokio::{signal, task};
 use traffic_billing_common::PacketLog;
 
-mod config;
 mod pod_watcher;
 mod traffic_handler;
 
-use config::Config;
 use pod_watcher::PodInfo;
 use traffic_handler::handle_traffic_event;
 
@@ -60,8 +58,11 @@ lazy_static! {
 
 #[derive(Debug, Parser)]
 struct Opt {
-    #[clap(long, default_value = "config.toml")]
-    config: String,
+    #[clap(long, default_value = "3000")]
+    port: u16,
+    
+    #[clap(long, use_value_delimiter = true, value_delimiter = ',')]
+    cidrs: Vec<String>,
 }
 
 async fn metrics(req: Request<Body>) -> Result<Response<Body>, Infallible> {
@@ -87,7 +88,6 @@ async fn metrics(req: Request<Body>) -> Result<Response<Body>, Infallible> {
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     let opt = Opt::parse();
-    let config = Config::from_file(&opt.config)?;
 
     TermLogger::init(
         LevelFilter::Debug,
@@ -104,7 +104,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let client = Client::try_default().await?;
     task::spawn(pod_watcher::watch_pods(client, Arc::clone(&pod_map)));
 
-    let addr: SocketAddr = config.server.parse()?;
+    let addr: SocketAddr = format!("0.0.0.0:{}", opt.port).parse()?;
     let make_svc = make_service_fn(|_conn| async { Ok::<_, Infallible>(service_fn(metrics)) });
     let server = Server::bind(&addr).serve(make_svc);
 
@@ -112,7 +112,7 @@ async fn main() -> Result<(), anyhow::Error> {
     BpfLogger::init(&mut bpf)?;
 
     attach_kprobes(&mut bpf)?;
-    setup_lpm_trie(&mut bpf, &config.cidrs)?;
+    setup_lpm_trie(&mut bpf, &opt.cidrs)?;
 
     let perf_array = setup_perf_array(&mut bpf, pod_map)?;
 
@@ -130,6 +130,8 @@ async fn main() -> Result<(), anyhow::Error> {
     server_task.abort();
     Ok(())
 }
+
+
 
 fn load_bpf() -> Result<Bpf, anyhow::Error> {
     #[cfg(debug_assertions)]
@@ -161,7 +163,7 @@ fn attach_kprobes(bpf: &mut Bpf) -> Result<(), anyhow::Error> {
 }
 
 fn setup_lpm_trie(bpf: &mut Bpf, cidrs: &[String]) -> Result<(), anyhow::Error> {
-    let mut trie = LpmTrie::try_from(bpf.map_mut("CIDRS")?)?;
+    let mut trie = LpmTrie::try_from(bpf.map_mut("LANCIDRS")?)?;
 
     for (i, cidr) in cidrs.iter().enumerate() {
         let (ip, prefix_len) = parse_cidr(cidr)?;

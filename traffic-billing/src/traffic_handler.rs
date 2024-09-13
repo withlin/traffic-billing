@@ -3,17 +3,34 @@ use dashmap::DashMap;
 use log::info;
 use std::{net::Ipv4Addr, sync::Arc};
 use traffic_billing_common::PacketLog;
-
 use crate::pod_watcher::PodInfo;
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum Direction {
+    Inbound,
+    Outbound,
+}
+
+impl Direction {
+    fn from_char(c: char) -> Option<Self> {
+        match c {
+            'I' => Some(Direction::Inbound),
+            'O' => Some(Direction::Outbound),
+            _ => None,
+        }
+    }
+}
 
 pub fn handle_traffic_event(data: &PacketLog, pod_map: &Arc<DashMap<String, PodInfo>>) {
     let src_addr = Ipv4Addr::from(data.saddr);
     let dst_addr = Ipv4Addr::from(data.daddr);
 
-    let (traffic_direction, pod_addr, metric_direction) = if data.direction == 'O' {
-        ("Outbound", src_addr, "upload")
-    } else {
-        ("Inbound", dst_addr, "download")
+    let direction = Direction::from_char(data.direction)
+        .expect("Invalid direction character");
+
+    let (traffic_direction, pod_addr, metric_direction) = match direction {
+        Direction::Outbound => ("Outbound", src_addr, "outbound"),
+        Direction::Inbound => ("Inbound", dst_addr, "inbound"),
     };
 
     let pod_info = pod_map.get(&pod_addr.to_string());
